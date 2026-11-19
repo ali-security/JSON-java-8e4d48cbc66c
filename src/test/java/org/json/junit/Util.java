@@ -117,4 +117,37 @@ public class Util {
             );
         }
     }
+
+    /**
+     * Runs the given body on a dedicated thread with a large (8 MiB) stack
+     * and returns whatever it threw, or null if it completed normally.
+     * The test suite may be run with a small stack (for example -Xss512k),
+     * in which case a parser that recurses up to its default nesting-depth
+     * limit could run out of stack before the limit is reached. Running the
+     * body on a large stack lets a test tell a rejection by the nesting-depth
+     * guard apart from a StackOverflowError.
+     * @param body the code to run
+     * @return the Throwable thrown by the body, or null if none was thrown
+     */
+    public static Throwable throwableFromLargeStack(final Runnable body) {
+        final Throwable[] thrown = new Throwable[1];
+        Thread thread = new Thread(null, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    body.run();
+                } catch (Throwable t) {
+                    thrown[0] = t;
+                }
+            }
+        }, "large-stack-test", 8L * 1024L * 1024L);
+        thread.start();
+        try {
+            thread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for the large-stack test thread", e);
+        }
+        return thrown[0];
+    }
 }
